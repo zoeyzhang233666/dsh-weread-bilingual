@@ -15,6 +15,7 @@
 ## 功能
 
 - 右侧栏：书架 + 章节阅读
+- **微信扫码登录**（无需 F12 复制 Cookie；支持自动续期）
 - 中英左右对照
 - 显示模式：**Hover（悬停才译）** / 双语常显 / 仅原文 / 仅译文
 - 译文样式：Plain / Dashed / Highlight / Quote / Weak / Mask
@@ -26,7 +27,7 @@
 
 - DeepSeek Harness `0.2.x`（`>=0.2.1-rc.5 <0.3.0`）
 - Node.js 24.9+
-- 微信读书账号（Cookie 登录）
+- 微信读书账号（扫码登录，或手动 Cookie）
 - 已配置的 DSH 模型
 
 ## 安装（插件市场 / Desktop）
@@ -62,7 +63,7 @@ dsh plugin --profile desktop add -w "d:/weread-bilingual-dsh"
 ## 使用
 
 1. 右侧栏 guide 打开 **微信读书双语**。
-2. 粘贴 weread.qq.com 的请求 Cookie 并保存（只存在当前 DSH profile）。
+2. 点 **生成二维码**，微信扫码确认登录（Cookie 只存在当前 DSH profile；也可折叠区手动粘贴 Cookie）。
 3. 从书架打开书籍。
 4. 默认 **Hover**：悬停句子才翻译；工具栏可切换 Mode / Theme。
 5. **Save MD** 导出当前章原文与译文。

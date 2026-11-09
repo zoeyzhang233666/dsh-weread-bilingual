@@ -5,12 +5,14 @@ import { normalizeDisplayMode, normalizeTranslationTheme } from './prefs.js'
 import { cacheKey, splitSentences } from './sentences.js'
 import { createTranslator, currentModelLabel, TRANSLATE_PROMPT_VERSION } from './translate.js'
 import * as weread from './weread/client.js'
+import { createQrSession, finishLoginFromInfo, pollLoginInfo, refreshCookie } from './weread/login.js'
 
-export const name = 'weread-bilingual-host'
+export const name = 'weread-bilingual'
 export const inject = ['webServer', 'settings']
 
 export const Config = z.object({
   cookie: z.string().default('').volatile(),
+  cookieUpdatedAt: z.number().default(0).volatile(),
   direction: z.string().default('zh-en').volatile(),
   autoTranslate: z.boolean().default(true).volatile(),
   displayMode: z.string().default('hover').volatile(),
@@ -19,6 +21,7 @@ export const Config = z.object({
 
 const API = '/weread-bilingual/api'
 const translationCache = new Map()
+const COOKIE_REFRESH_MS = 45 * 60 * 1000
 
 function live(value, fallback) {
   if (value !== null && typeof value === 'object' && typeof value.get === 'function') {
@@ -31,6 +34,10 @@ function settingsOf(config) {
   const raw = config && typeof config === 'object' ? config : {}
   return {
     get cookie() { return String(live(raw.cookie, '') || '') },
+    get cookieUpdatedAt() {
+      const value = Number(live(raw.cookieUpdatedAt, 0) || 0)
+      return Number.isFinite(value) ? value : 0
+    },
     get direction() {
       const value = String(live(raw.direction, 'zh-en') || 'zh-en')
       return value === 'en-zh' ? 'en-zh' : 'zh-en'
@@ -69,10 +76,37 @@ export function apply(ctx, config) {
     await writer.mutate(name, ops)
   }
 
+  const saveCookie = async (cookie) => {
+    await persist({ cookie, cookieUpdatedAt: Date.now() })
+  }
+
+  const maybeRefreshCookie = async ({ force = false } = {}) => {
+    const cookie = settings.cookie.trim()
+    if (!cookie) return null
+    const age = Date.now() - settings.cookieUpdatedAt
+    if (!force && settings.cookieUpdatedAt > 0 && age < COOKIE_REFRESH_MS) return cookie
+    try {
+      const refreshed = await refreshCookie(cookie)
+      if (refreshed.changed) {
+        const verified = await weread.getUser(refreshed.cookie)
+        const next = verified.cookie || refreshed.cookie
+        await saveCookie(next)
+        return next
+      }
+      if (settings.cookieUpdatedAt <= 0) await persist({ cookieUpdatedAt: Date.now() })
+      return cookie
+    } catch {
+      return cookie
+    }
+  }
+
+  const pathIs = (path, suffix) => path === `${API}${suffix}` || path === suffix
+
   async function handle(req, res) {
     const path = pathname(req)
     try {
-      if (path === `${API}/status` && req.method === 'GET') {
+      if (pathIs(path, '/status') && req.method === 'GET') {
+        if (settings.cookie.trim()) await maybeRefreshCookie()
         sendJson(res, 200, {
           loggedIn: Boolean(settings.cookie.trim()),
           direction: settings.direction,
@@ -84,21 +118,63 @@ export function apply(ctx, config) {
         return
       }
 
-      if (path === `${API}/auth/cookie` && req.method === 'POST') {
+      if (pathIs(path, '/auth/qr/start') && req.method === 'POST') {
+        const session = await createQrSession()
+        sendJson(res, 200, session)
+        return
+      }
+
+      if (pathIs(path, '/auth/qr/wait') && req.method === 'POST') {
+        const body = await readJson(req)
+        const uid = String(body.uid || '').trim()
+        if (!uid) {
+          sendJson(res, 400, { error: 'uid required' })
+          return
+        }
+        const poll = await pollLoginInfo(uid, { otp: String(body.otp || '') })
+        if (poll.status !== 'ok') {
+          sendJson(res, 200, {
+            status: poll.status,
+            error: poll.error || undefined,
+          })
+          return
+        }
+        const cookie = await finishLoginFromInfo(poll.info, {
+          getUser: weread.getUser,
+          refreshCookie,
+        })
+        await saveCookie(cookie)
+        // Warm the shelf once so the first sidebar fetch is less likely empty.
+        try { await weread.getShelf(cookie) } catch { /* ignore warm failures */ }
+        sendJson(res, 200, { status: 'ok', loggedIn: true })
+        return
+      }
+
+      if (pathIs(path, '/auth/cookie') && req.method === 'POST') {
         const body = await readJson(req)
         const cookie = String(body.cookie || '').trim()
         if (!cookie) {
           sendJson(res, 400, { error: 'Cookie is required.' })
           return
         }
-        await weread.getUser(cookie)
-        await persist({ cookie })
+        const verified = await weread.getUser(cookie)
+        await saveCookie(verified.cookie || cookie)
         sendJson(res, 200, { ok: true })
         return
       }
 
-      if (path === `${API}/auth/logout` && req.method === 'POST') {
-        await persist({ cookie: '' })
+      if (pathIs(path, '/auth/refresh') && req.method === 'POST') {
+        const cookie = await maybeRefreshCookie({ force: true })
+        if (!cookie) {
+          sendJson(res, 401, { error: 'Not logged in.' })
+          return
+        }
+        sendJson(res, 200, { ok: true, loggedIn: true })
+        return
+      }
+
+      if (pathIs(path, '/auth/logout') && req.method === 'POST') {
+        await persist({ cookie: '', cookieUpdatedAt: 0 })
         sendJson(res, 200, { ok: true })
         return
       }
@@ -121,10 +197,24 @@ export function apply(ctx, config) {
       }
 
       if (path === `${API}/shelf` && req.method === 'GET') {
-        const cookie = requireCookie(settings, res)
+        let cookie = requireCookie(settings, res)
         if (!cookie) return
-        const shelf = await weread.getShelf(cookie)
-        sendJson(res, 200, shelf)
+        cookie = (await maybeRefreshCookie()) || cookie
+        try {
+          const shelf = await weread.getShelf(cookie)
+          sendJson(res, 200, shelf)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (/expired|Login/i.test(message)) {
+            const retryCookie = await maybeRefreshCookie({ force: true })
+            if (retryCookie && retryCookie !== cookie) {
+              const shelf = await weread.getShelf(retryCookie)
+              sendJson(res, 200, shelf)
+              return
+            }
+          }
+          throw error
+        }
         return
       }
 

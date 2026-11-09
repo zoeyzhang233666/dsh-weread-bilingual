@@ -16,7 +16,10 @@ export function createApi(base = '/weread-bilingual/api') {
 
   return {
     status: () => request('/status'),
+    startQr: () => request('/auth/qr/start', { method: 'POST', body: '{}' }),
+    waitQr: body => request('/auth/qr/wait', { method: 'POST', body: JSON.stringify(body) }),
     saveCookie: cookie => request('/auth/cookie', { method: 'POST', body: JSON.stringify({ cookie }) }),
+    refreshAuth: () => request('/auth/refresh', { method: 'POST', body: '{}' }),
     logout: () => request('/auth/logout', { method: 'POST', body: '{}' }),
     prefs: body => request('/prefs', { method: 'POST', body: JSON.stringify(body) }),
     shelf: () => request('/shelf'),

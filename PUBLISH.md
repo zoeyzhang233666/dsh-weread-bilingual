@@ -25,13 +25,13 @@ npm whoami
 ```sh
 npm run pack:dist
 # Inspect the tarball: no Cookie, no node_modules, includes client.js + host src
-tar -tzf dsh-weread-bilingual-0.1.5.tgz | head
+tar -tzf dsh-weread-bilingual-0.1.6.tgz | head
 ```
 
 Install the tarball into a throwaway profile if you want:
 
 ```sh
-dsh plugin --profile web add -w ./dsh-weread-bilingual-0.1.5.tgz
+dsh plugin --profile web add -w ./dsh-weread-bilingual-0.1.6.tgz
 ```
 
 ## 4. Publish

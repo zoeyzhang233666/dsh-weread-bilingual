@@ -15,6 +15,7 @@ Read Chinese books in the **right sidebar**, see English sentence-by-sentence wi
 ## Features
 
 - Weread shelf + chapter reader in the DSH right sidebar
+- **WeChat QR login** (no DevTools Cookie copy; auto-refresh while valid)
 - Side-by-side Chinese / English rows
 - Display modes: **Hover** (translate on hover), Bilingual, Source, Translation
 - Translation themes (plain / dashed / highlight / quote / weak / mask)
@@ -26,7 +27,7 @@ Read Chinese books in the **right sidebar**, see English sentence-by-sentence wi
 
 - DeepSeek Harness `0.2.x` (`>=0.2.1-rc.5 <0.3.0`)
 - Node.js 24.9+
-- A WeChat Reading account (Cookie login)
+- A WeChat Reading account (QR login, or manual Cookie)
 - A configured DSH model route
 
 ## Install (plugin marketplace / Desktop)
@@ -62,7 +63,7 @@ dsh plugin --profile desktop add -w "d:/weread-bilingual-dsh"
 ## Use
 
 1. Open the right sidebar guide and choose **Weread Bilingual** / **微信读书双语**.
-2. Paste your `weread.qq.com` request Cookie and save (stored only in this DSH profile).
+2. Click **Generate QR**, scan with WeChat and confirm (Cookie stays in this DSH profile; manual Cookie paste remains as fallback).
 3. Open a book from the shelf.
 4. Default **Hover** mode: hover a sentence to translate (saves tokens). Switch **Mode** / **Theme** in the toolbar as needed.
 5. **Save MD** exports the current chapter’s source + translations.

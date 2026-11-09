@@ -14,6 +14,7 @@ import {
   writeLocalDisplayMode,
   writeLocalTranslationTheme,
 } from './prefs.js'
+import { qrDataUrlFromText } from './qr.js'
 import { CSS, CSS_VERSION } from './styles.js'
 
 const api = createApi()
@@ -102,9 +103,14 @@ export function ReaderPanel() {
   const [tab, setTab] = useState('shelf')
   const [status, setStatus] = useState(null)
   const [cookieDraft, setCookieDraft] = useState('')
+  const [showManualCookie, setShowManualCookie] = useState(false)
+  const [qr, setQr] = useState(null)
+  const [qrPhase, setQrPhase] = useState('idle')
+  const [otpDraft, setOtpDraft] = useState('')
   const [books, setBooks] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const qrAbortRef = useRef(0)
   const [book, setBook] = useState(null)
   const [chapters, setChapters] = useState([])
   const [chapterIdx, setChapterIdx] = useState(0)
@@ -183,19 +189,27 @@ export function ReaderPanel() {
     return next
   }, [])
 
-  const loadShelf = useCallback(async () => {
+  const loadShelf = useCallback(async ({ attempts = 1 } = {}) => {
     setLoading(true)
     setError('')
     try {
       const next = await refreshStatus()
       if (!next.loggedIn) {
         setBooks([])
-        return
+        return []
       }
-      const shelf = await api.shelf()
-      setBooks(shelf.books || [])
+      let books = []
+      for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+        const shelf = await api.shelf()
+        books = shelf.books || []
+        setBooks(books)
+        if (books.length > 0 || attempt === attempts - 1) break
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
+      }
+      return books
     } catch (err) {
       setError(err.message || String(err))
+      return []
     } finally {
       setLoading(false)
     }
@@ -469,12 +483,88 @@ export function ReaderPanel() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [book, chapter, chapterIdx])
 
+  const stopQr = useCallback(() => {
+    qrAbortRef.current += 1
+    setQr(null)
+    setQrPhase('idle')
+    setOtpDraft('')
+  }, [])
+
+  const pollQr = useCallback(async (uid, generation, otp = '') => {
+    while (qrAbortRef.current === generation) {
+      let result
+      try {
+        result = await api.waitQr({ uid, otp })
+      } catch (err) {
+        if (qrAbortRef.current !== generation) return
+        setError(err.message || String(err))
+        setQrPhase('error')
+        return
+      }
+      if (qrAbortRef.current !== generation) return
+      if (result.status === 'ok') {
+        setQrPhase('ok')
+        setQr(null)
+        setOtpDraft('')
+        showToast('微信读书登录成功')
+        try { await api.refreshAuth() } catch { /* shelf retry still runs */ }
+        await loadShelf({ attempts: 3 })
+        return
+      }
+      if (result.status === 'need_otp') {
+        setQrPhase('need_otp')
+        if (result.error) setError(result.error)
+        return
+      }
+      if (result.status === 'expired') {
+        setQrPhase('expired')
+        setError(result.error || '二维码已过期，请刷新')
+        return
+      }
+      setQrPhase('waiting')
+    }
+  }, [loadShelf, showToast])
+
+  const startQr = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    stopQr()
+    const generation = qrAbortRef.current
+    try {
+      setQrPhase('starting')
+      const session = await api.startQr()
+      if (qrAbortRef.current !== generation) return
+      const qrDataUrl = await qrDataUrlFromText(session.qrUrl)
+      if (qrAbortRef.current !== generation) return
+      setQr({ ...session, qrDataUrl })
+      setQrPhase('waiting')
+      void pollQr(session.uid, generation)
+    } catch (err) {
+      setError(err.message || String(err))
+      setQrPhase('error')
+    } finally {
+      setLoading(false)
+    }
+  }, [pollQr, stopQr])
+
+  const submitOtp = useCallback(async () => {
+    if (!qr?.uid || !otpDraft.trim()) return
+    setError('')
+    setQrPhase('waiting')
+    const generation = qrAbortRef.current
+    await pollQr(qr.uid, generation, otpDraft.trim())
+  }, [otpDraft, pollQr, qr])
+
+  useEffect(() => () => { qrAbortRef.current += 1 }, [])
+
   const saveCookie = async () => {
     setLoading(true)
     setError('')
     try {
       await api.saveCookie(cookieDraft)
       setCookieDraft('')
+      setShowManualCookie(false)
+      stopQr()
       await loadShelf()
     } catch (err) {
       setError(err.message || String(err))
@@ -645,22 +735,62 @@ export function ReaderPanel() {
         {tab === 'shelf' ? (
           !status?.loggedIn ? (
             <div className="wrb-login">
-              <h3>Import WeChat Reading Cookie</h3>
-              <p>Open weread.qq.com in a browser, sign in, copy the request Cookie, and paste it here. The plugin stores it in this DSH profile only.</p>
-              <textarea value={cookieDraft} onChange={event => setCookieDraft(event.target.value)} placeholder="wr_vid=...; wr_skey=...; ..." />
-              <button type="button" className="wrb-btn primary" onClick={saveCookie} disabled={loading || !cookieDraft.trim()}>Save Cookie</button>
+              <h3>微信扫码登录</h3>
+              <p>用微信扫描下方二维码，在手机上确认后即可登录。Cookie 只保存在当前 DSH profile。</p>
+              {qr?.qrDataUrl ? (
+                <div className="wrb-qr">
+                  <img src={qr.qrDataUrl} alt="微信读书登录二维码" width={240} height={240} />
+                  <div className="wrb-qr-status">
+                    {qrPhase === 'waiting' ? '等待扫码确认…' : null}
+                    {qrPhase === 'starting' ? '正在生成二维码…' : null}
+                    {qrPhase === 'need_otp' ? '请输入手机上显示的验证码' : null}
+                    {qrPhase === 'expired' ? '二维码已过期' : null}
+                    {qrPhase === 'error' ? '登录失败，请重试' : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="wrb-qr-placeholder">点击下方按钮生成二维码</div>
+              )}
+              {qrPhase === 'need_otp' ? (
+                <div className="wrb-otp">
+                  <input
+                    value={otpDraft}
+                    onChange={event => setOtpDraft(event.target.value)}
+                    placeholder="4 位验证码"
+                    maxLength={8}
+                    inputMode="numeric"
+                  />
+                  <button type="button" className="wrb-btn primary" onClick={submitOtp} disabled={loading || !otpDraft.trim()}>验证</button>
+                </div>
+              ) : null}
+              <div className="wrb-login-actions">
+                <button type="button" className="wrb-btn primary" onClick={startQr} disabled={loading || qrPhase === 'starting'}>
+                  {qr ? '刷新二维码' : '生成二维码'}
+                </button>
+                {qr ? <button type="button" className="wrb-btn" onClick={stopQr}>取消</button> : null}
+              </div>
+              <button type="button" className="wrb-linkish" onClick={() => setShowManualCookie(value => !value)}>
+                {showManualCookie ? '收起手动 Cookie' : '改用手动粘贴 Cookie'}
+              </button>
+              {showManualCookie ? (
+                <div className="wrb-manual-cookie">
+                  <p>打开 weread.qq.com，登录后从请求头复制 Cookie 粘贴到这里。</p>
+                  <textarea value={cookieDraft} onChange={event => setCookieDraft(event.target.value)} placeholder="wr_vid=...; wr_skey=...; ..." />
+                  <button type="button" className="wrb-btn primary" onClick={saveCookie} disabled={loading || !cookieDraft.trim()}>保存 Cookie</button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="wrb-shelf">
               <div className="wrb-reader-head">
                 <button type="button" className="wrb-btn" onClick={loadShelf} disabled={loading}>Refresh</button>
-                <button type="button" className="wrb-btn" onClick={async () => { await api.logout(); await loadShelf() }}>Log out</button>
+                <button type="button" className="wrb-btn" onClick={async () => { stopQr(); await api.logout(); await loadShelf() }}>Log out</button>
                 <span className="wrb-meta">{books.length} books</span>
               </div>
               {books.length === 0 && !loading ? <div className="wrb-empty">Shelf is empty.</div> : null}
               {books.map(item => (
                 <button key={item.bookId} type="button" className="wrb-book" onClick={() => openBook(item)}>
-                  {item.cover ? <img src={item.cover} alt="" /> : <div />}
+                  {item.cover ? <img src={item.cover} alt="" loading="lazy" decoding="async" /> : <div />}
                   <div>
                     <strong>{item.title}</strong>
                     <span>{item.author}</span>

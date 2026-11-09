@@ -6,3 +6,6 @@ _ref/
 .DS_Store
 *.log
 tmp-*.mjs
+
+main.js
+

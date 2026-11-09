@@ -1,14 +1,10 @@
 {
   "name": "dsh-weread-bilingual-client",
-  "version": "0.1.5",
+  "version": "0.1.9",
   "private": true,
   "description": "Internal client sources for dsh-weread-bilingual (not published separately)",
   "type": "module",
   "main": "./index.js",
-  "exports": {
-    ".": "./index.js",
-    "./client": "./client.js"
-  },
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build-client.mjs"
@@ -16,9 +12,7 @@
   "devDependencies": {
     "esbuild": "0.28.2"
   },
-  "dsh": {
-    "client": {
-      "platform": "web"
-    }
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "dsh-weread-bilingual",
-  "version": "0.1.5",
-  "description": "WeChat Reading bilingual reader for DeepSeek Harness ? learn English in context while reading Weread books (zh?en, sentence-by-sentence).",
+  "version": "0.1.9",
+  "description": "WeChat Reading bilingual reader for DeepSeek Harness: learn English in context while reading Weread books (zh?en, sentence-by-sentence).",
   "type": "module",
   "license": "MIT",
   "author": "zoeyzhang233666",

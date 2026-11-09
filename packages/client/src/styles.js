@@ -1,4 +1,4 @@
-export const CSS_VERSION = '2026-11-09-toggle-fix'
+export const CSS_VERSION = '2026-11-09-qr-login'
 
 /** ChemClaw Paper light palette as fallbacks; prefer live --bt-* when ChemClaw is loaded. */
 export const CSS = `
@@ -147,6 +147,67 @@ export const CSS = `
   background: color-mix(in srgb, var(--wrb-accent) 10%, var(--wrb-panel));
   margin-bottom: 12px;
 }
+.wrb-login h3 { margin: 0 0 8px; font-size: 18px; }
+.wrb-login > p { margin: 0 0 14px; color: var(--wrb-muted); font-size: 13px; }
+.wrb-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 14px;
+}
+.wrb-qr img {
+  width: 240px;
+  height: 240px;
+  border-radius: 12px;
+  border: 1px solid var(--wrb-line);
+  background: #fff;
+}
+.wrb-qr-status, .wrb-qr-placeholder {
+  color: var(--wrb-muted);
+  font-size: 13px;
+  text-align: center;
+}
+.wrb-qr-placeholder {
+  padding: 48px 16px;
+  border: 1px dashed var(--wrb-line-2);
+  border-radius: 12px;
+  margin: 8px 0 14px;
+}
+.wrb-login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.wrb-otp {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.wrb-otp input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid var(--wrb-line-2);
+  background: var(--wrb-bg);
+  color: inherit;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.wrb-linkish {
+  border: 0;
+  background: transparent;
+  color: var(--wrb-accent);
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.wrb-manual-cookie { margin-top: 12px; }
+.wrb-manual-cookie p { margin: 0 0 8px; color: var(--wrb-muted); font-size: 12px; }
 .wrb-login textarea {
   width: 100%;
   min-height: 110px;

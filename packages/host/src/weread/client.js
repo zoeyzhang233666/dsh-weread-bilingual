@@ -1,10 +1,12 @@
 import { calcHash, currentTime, sign } from './sign.js'
 import { chk, dH, dS, dT } from './decrypt.js'
+import { mergeCookieHeader, parseCookieHeader } from './cookie.js'
 
 const BASE = 'https://weread.qq.com'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 const PS = 'a2b325707a19e580g0186a2'
 const PC = '430321207a19e581g013ab0'
+const SHELF_SYNC_PARAMS = { synckey: 0, teenmode: 0, album: 1, onlyBookid: 0 }
 
 function headers(cookie, extra = {}) {
   return {
@@ -16,6 +18,10 @@ function headers(cookie, extra = {}) {
   }
 }
 
+function setCookiesOf(res) {
+  return typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []
+}
+
 async function getJson(cookie, path, params = {}) {
   const url = new URL(path, BASE)
   for (const [key, value] of Object.entries(params)) {
@@ -23,7 +29,70 @@ async function getJson(cookie, path, params = {}) {
   }
   const res = await fetch(url, { headers: headers(cookie) })
   const data = await res.json().catch(() => ({}))
-  return { status: res.status, data }
+  return { status: res.status, data, setCookies: setCookiesOf(res) }
+}
+
+export function userVidFromCookie(cookie) {
+  return String(parseCookieHeader(cookie).get('wr_vid') || '').trim()
+}
+
+export function assertWereadUser(status, data) {
+  if (unauthorized(status, data)) {
+    throw new Error('Login expired. Re-import your Weread Cookie.')
+  }
+  if (status >= 400) throw new Error(`Weread HTTP ${status}`)
+  const code = data?.errCode ?? data?.errcode
+  if (code != null && code !== 0) {
+    throw new Error(data?.errMsg || data?.errmsg || `Weread user error ${code}`)
+  }
+  if (data?.name == null && data?.userVid == null) {
+    throw new Error('Weread user profile is incomplete. Re-login.')
+  }
+  return data
+}
+
+export function shouldRetryEmptyShelf(shelf) {
+  const count = Number(shelf?.bookCount)
+  return Array.isArray(shelf?.books) && shelf.books.length === 0 && Number.isFinite(count) && count > 0
+}
+
+export function normalizeShelfData(data = {}) {
+  const progress = {}
+  for (const row of data.bookProgress ?? []) {
+    if (!row?.bookId) continue
+    progress[row.bookId] = {
+      bookId: row.bookId,
+      chapterUid: row.chapterUid,
+      chapterIdx: row.chapterIdx,
+      progress: row.progress,
+      finished: row.finished,
+      updateTime: row.updateTime,
+    }
+  }
+  const books = (Array.isArray(data.books) ? data.books : []).map((book) => {
+    const bookId = book.bookId
+    const prog = progress[bookId]
+    return {
+      bookId,
+      title: book.title ?? book.book?.title ?? 'Untitled',
+      author: book.author ?? book.book?.author ?? '',
+      cover: book.cover ?? book.book?.cover ?? '',
+      progress: book.progress ?? prog?.progress,
+      finished: book.finished ?? prog?.finished,
+      format: book.format ?? book.book?.format,
+      readUpdateTime: Number(book.readUpdateTime || prog?.updateTime || 0) || 0,
+    }
+  })
+  books.sort((a, b) => (b.readUpdateTime || 0) - (a.readUpdateTime || 0))
+  return {
+    books,
+    progress,
+    bookCount: Number(data.bookCount) || books.length,
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function postJson(cookie, path, body) {
@@ -53,40 +122,31 @@ function unauthorized(status, data) {
 }
 
 export async function getUser(cookie) {
-  const { status, data } = await getJson(cookie, '/web/user')
-  if (unauthorized(status, data)) throw new Error('Login expired. Re-import your Weread Cookie.')
-  if (status >= 400) throw new Error(`Weread HTTP ${status}`)
-  return data
+  const vid = userVidFromCookie(cookie)
+  if (!vid) throw new Error('Login expired. Re-import your Weread Cookie.')
+  const { status, data, setCookies } = await getJson(cookie, '/web/user', { userVid: vid })
+  const user = assertWereadUser(status, data)
+  let nextCookie = cookie
+  if (setCookies.length) nextCookie = mergeCookieHeader(nextCookie, setCookies)
+  if (user.name && !parseCookieHeader(nextCookie).get('wr_name')) {
+    nextCookie = mergeCookieHeader(nextCookie, [`wr_name=${encodeURIComponent(String(user.name))}`])
+  }
+  return { user, cookie: nextCookie, changed: nextCookie !== cookie }
 }
 
-export async function getShelf(cookie) {
-  const { status, data } = await getJson(cookie, '/web/shelf/sync')
-  if (unauthorized(status, data)) throw new Error('Login expired. Re-import your Weread Cookie.')
-  if (status >= 400) throw new Error(`Weread HTTP ${status}`)
-  const books = Array.isArray(data.books) ? data.books : []
-  const progress = {}
-  for (const row of data.bookProgress ?? []) {
-    if (!row?.bookId) continue
-    progress[row.bookId] = {
-      bookId: row.bookId,
-      chapterUid: row.chapterUid,
-      chapterIdx: row.chapterIdx,
-      progress: row.progress,
-      finished: row.finished,
-      updateTime: row.updateTime,
+export async function getShelf(cookie, { retries = 2 } = {}) {
+  let attempt = 0
+  for (;;) {
+    const { status, data } = await getJson(cookie, '/web/shelf/sync', SHELF_SYNC_PARAMS)
+    if (unauthorized(status, data)) throw new Error('Login expired. Re-import your Weread Cookie.')
+    if (status >= 400) throw new Error(`Weread HTTP ${status}`)
+    const shelf = normalizeShelfData(data)
+    if (!shouldRetryEmptyShelf(shelf) || attempt >= retries) {
+      // Omit the bulky progress map from the sidebar payload; book rows already carry %.
+      return { books: shelf.books, bookCount: shelf.bookCount }
     }
-  }
-  return {
-    books: books.map(book => ({
-      bookId: book.bookId,
-      title: book.title ?? book.book?.title ?? 'Untitled',
-      author: book.author ?? book.book?.author ?? '',
-      cover: book.cover ?? book.book?.cover ?? '',
-      progress: book.progress ?? progress[book.bookId]?.progress,
-      finished: book.finished ?? progress[book.bookId]?.finished,
-      format: book.format ?? book.book?.format,
-    })),
-    progress,
+    attempt += 1
+    await sleep(400 * attempt)
   }
 }
 
