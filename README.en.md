@@ -30,13 +30,20 @@ Read Chinese books in the **right sidebar**, see English sentence-by-sentence wi
 - A WeChat Reading account (QR login, or manual Cookie)
 - A configured DSH model route
 
-## Install (plugin marketplace / Desktop)
+## Install
+
+Published on npm: [`dsh-weread-bilingual`](https://www.npmjs.com/package/dsh-weread-bilingual).
+
+> This is a **DSH plugin**, not a global CLI. Do **not** use plain `npm install -g`.  
+> Install it through DSH’s plugin installer (which downloads the package from npm).
+
+### Plugin marketplace / Desktop
 
 1. Open DSH **plugin marketplace / plugin installer**.
 2. Search or paste: `dsh-weread-bilingual`
 3. Install, then **fully restart** DeepSeek Harness Desktop (or restart `dsh web` and hard-refresh).
 
-### CLI
+### CLI (recommended — installs from npm)
 
 ```sh
 dsh plugin --profile desktop add -w dsh-weread-bilingual
@@ -46,7 +53,15 @@ dsh plugin --profile desktop add -w dsh-weread-bilingual
 dsh plugin --profile web add -w dsh-weread-bilingual
 ```
 
-### From GitHub (before / without npm)
+Pin a version:
+
+```sh
+dsh plugin --profile desktop add -w dsh-weread-bilingual@0.1.9
+```
+
+To upgrade: run the same `add` again (or update in the marketplace), then restart DSH.
+
+### From GitHub (track repo HEAD, or try a branch)
 
 ```sh
 dsh plugin --profile desktop add -w github:zoeyzhang233666/dsh-weread-bilingual
@@ -55,10 +70,14 @@ dsh plugin --profile desktop add -w github:zoeyzhang233666/dsh-weread-bilingual
 ### Local development
 
 ```sh
+git clone https://github.com/zoeyzhang233666/dsh-weread-bilingual.git
+cd dsh-weread-bilingual
 npm install
 npm run build
 dsh plugin --profile desktop add -w "d:/weread-bilingual-dsh"
 ```
+
+Replace the last path with your local checkout.
 
 ## Use
 

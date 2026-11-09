@@ -30,13 +30,20 @@
 - 微信读书账号（扫码登录，或手动 Cookie）
 - 已配置的 DSH 模型
 
-## 安装（插件市场 / Desktop）
+## 安装
+
+包已发布到 npm：[`dsh-weread-bilingual`](https://www.npmjs.com/package/dsh-weread-bilingual)。
+
+> 这是 **DSH 插件**，不要用普通的 `npm install -g` 当全局工具装。  
+> 正确方式是让 DSH 的插件安装器去拉这个包名（底层会从 npm 下载）。
+
+### 插件市场 / Desktop
 
 1. 打开 DSH **插件市场 / 插件安装**。
 2. 搜索或粘贴：`dsh-weread-bilingual`
 3. 安装后**完全退出并重启** Desktop（或重启 `dsh web` 后强刷页面）。
 
-### 命令行
+### 命令行（推荐，从 npm 安装）
 
 ```sh
 dsh plugin --profile desktop add -w dsh-weread-bilingual
@@ -46,7 +53,15 @@ dsh plugin --profile desktop add -w dsh-weread-bilingual
 dsh plugin --profile web add -w dsh-weread-bilingual
 ```
 
-### 直接从 GitHub 安装（尚未发 npm 或临时使用）
+指定版本：
+
+```sh
+dsh plugin --profile desktop add -w dsh-weread-bilingual@0.1.9
+```
+
+升级到最新：再执行一次上面的 `add`（或在市场里更新），然后重启 DSH。
+
+### 从 GitHub 安装（跟 npm 最新版、或临时试分支）
 
 ```sh
 dsh plugin --profile desktop add -w github:zoeyzhang233666/dsh-weread-bilingual
@@ -55,10 +70,14 @@ dsh plugin --profile desktop add -w github:zoeyzhang233666/dsh-weread-bilingual
 ### 本地开发安装
 
 ```sh
+git clone https://github.com/zoeyzhang233666/dsh-weread-bilingual.git
+cd dsh-weread-bilingual
 npm install
 npm run build
 dsh plugin --profile desktop add -w "d:/weread-bilingual-dsh"
 ```
+
+把最后一行路径换成你本机仓库的绝对路径。
 
 ## 使用
 
