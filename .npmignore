@@ -1,0 +1,15 @@
+_ref/
+*.tgz
+tmp-*.mjs
+.dsh-test/
+.smoke/
+node_modules/
+packages/client/node_modules/
+packages/host/node_modules/
+packages/client/src
+packages/client/scripts
+test/
+docs/
+.gitignore
+.gitattributes
+PUBLISH.md

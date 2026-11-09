@@ -1,0 +1,9 @@
+{
+  "name": "dsh-weread-bilingual-host",
+  "version": "0.1.5",
+  "private": true,
+  "description": "Internal host sources for dsh-weread-bilingual (not published separately)",
+  "type": "module",
+  "main": "./src/index.js",
+  "license": "MIT"
+}

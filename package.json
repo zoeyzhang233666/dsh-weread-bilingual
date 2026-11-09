@@ -1,0 +1,83 @@
+{
+  "name": "dsh-weread-bilingual",
+  "version": "0.1.5",
+  "description": "WeChat Reading bilingual reader for DeepSeek Harness ? learn English in context while reading Weread books (zh?en, sentence-by-sentence).",
+  "type": "module",
+  "license": "MIT",
+  "author": "zoeyzhang233666",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "weread",
+    "wechat-reading",
+    "bilingual",
+    "translation",
+    "english-learning",
+    "immersive-reading"
+  ],
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "main": "./packages/host/src/index.js",
+  "exports": {
+    ".": "./packages/host/src/index.js",
+    "./client": "./packages/client/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "NOTICE",
+    "LICENSE",
+    "packages/host/package.json",
+    "packages/host/src",
+    "packages/client/package.json",
+    "packages/client/index.js",
+    "packages/client/client.js"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zoeyzhang233666/dsh-weread-bilingual.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zoeyzhang233666/dsh-weread-bilingual/issues"
+  },
+  "homepage": "https://github.com/zoeyzhang233666/dsh-weread-bilingual#readme",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.2.1-rc.5 <0.3.0"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "scripts": {
+    "build": "npm run build --prefix packages/client",
+    "test": "node --test test/*.test.js",
+    "pack:dist": "npm run build && npm pack",
+    "prepack": "npm run build && npm test"
+  }
+}

@@ -1,0 +1,4 @@
+# Single npm package: host loads from package main, browser UI from ./client.
+- insert:
+    - id: weread-bilingual
+      name: dsh-weread-bilingual
