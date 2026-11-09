@@ -1,39 +1,41 @@
 # dsh-weread-bilingual
 
-WeChat Reading (**微信读书**) bilingual reader for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
+[中文](./README.md) | [English](./README.en.md)
 
-Read Chinese books in the **right sidebar**, see English sentence-by-sentence with your **current DSH model**, and keep Weread reading time in sync. Built for **learning English in a context you actually care about**.
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的**微信读书双语阅读**插件。
 
-> **Install name (copy this into the DSH plugin marketplace / installer):**
+在 DSH **右侧栏**打开书架与章节，用当前默认模型**逐句**译成英文，并尽量同步微信读书阅读时长。理念是：**在自己感兴趣的文本语境里学英语**。
+
+> **插件市场 / 安装器请搜索或粘贴完整包名：**
 >
 > ```text
 > dsh-weread-bilingual
 > ```
 
-## Features
+## 功能
 
-- Weread shelf + chapter reader in the DSH right sidebar
-- Side-by-side Chinese / English rows
-- Display modes: **Hover** (translate on hover), Bilingual, Source, Translation
-- Translation themes (plain / dashed / highlight / quote / weak / mask)
-- Space to pause auto-translate (in bilingual modes)
-- Export the current chapter as a bilingual Markdown table (**Save MD**)
-- Reading-time heartbeats via Weread `/web/book/read`
+- 右侧栏：书架 + 章节阅读
+- 中英左右对照
+- 显示模式：**Hover（悬停才译）** / 双语常显 / 仅原文 / 仅译文
+- 译文样式：Plain / Dashed / Highlight / Quote / Weak / Mask
+- 双语模式下空格可暂停自动翻译
+- **Save MD**：导出当前章双语 Markdown 表格
+- 阅读时长心跳（Weread `/web/book/read`）
 
-## Requirements
+## 环境
 
-- DeepSeek Harness `0.2.x` (`>=0.2.1-rc.5 <0.3.0`)
+- DeepSeek Harness `0.2.x`（`>=0.2.1-rc.5 <0.3.0`）
 - Node.js 24.9+
-- A WeChat Reading account (Cookie login)
-- A configured DSH model route
+- 微信读书账号（Cookie 登录）
+- 已配置的 DSH 模型
 
-## Install (plugin marketplace / Desktop)
+## 安装（插件市场 / Desktop）
 
-1. Open DSH **plugin marketplace / plugin installer**.
-2. Search or paste: `dsh-weread-bilingual`
-3. Install, then **fully restart** DeepSeek Harness Desktop (or restart `dsh web` and hard-refresh).
+1. 打开 DSH **插件市场 / 插件安装**。
+2. 搜索或粘贴：`dsh-weread-bilingual`
+3. 安装后**完全退出并重启** Desktop（或重启 `dsh web` 后强刷页面）。
 
-### CLI
+### 命令行
 
 ```sh
 dsh plugin --profile desktop add -w dsh-weread-bilingual
@@ -43,13 +45,13 @@ dsh plugin --profile desktop add -w dsh-weread-bilingual
 dsh plugin --profile web add -w dsh-weread-bilingual
 ```
 
-### From GitHub (before / without npm)
+### 直接从 GitHub 安装（尚未发 npm 或临时使用）
 
 ```sh
 dsh plugin --profile desktop add -w github:zoeyzhang233666/dsh-weread-bilingual
 ```
 
-### Local development
+### 本地开发安装
 
 ```sh
 npm install
@@ -57,22 +59,22 @@ npm run build
 dsh plugin --profile desktop add -w "d:/weread-bilingual-dsh"
 ```
 
-## Use
+## 使用
 
-1. Open the right sidebar guide and choose **Weread Bilingual** / **微信读书双语**.
-2. Paste your `weread.qq.com` request Cookie and save (stored only in this DSH profile).
-3. Open a book from the shelf.
-4. Default **Hover** mode: hover a sentence to translate (saves tokens). Switch **Mode** / **Theme** in the toolbar as needed.
-5. **Save MD** exports the current chapter’s source + translations.
+1. 右侧栏 guide 打开 **微信读书双语**。
+2. 粘贴 weread.qq.com 的请求 Cookie 并保存（只存在当前 DSH profile）。
+3. 从书架打开书籍。
+4. 默认 **Hover**：悬停句子才翻译；工具栏可切换 Mode / Theme。
+5. **Save MD** 导出当前章原文与译文。
 
-## Risks
+## 风险说明
 
-- Weread has no official public API; endpoints may change.
-- Cookie equals login state — never commit it; store only in your DSH profile.
-- Reading-time parity with the official app is best-effort.
-- Translation uses your DSH model quota.
+- 微信读书无公开官方 API，接口可能变更。
+- Cookie 等同登录态，勿提交到仓库。
+- 阅读时长与官方 App 对齐为尽力而为。
+- 翻译会消耗 DSH 模型额度。
 
-## Development
+## 开发
 
 ```sh
 npm test
@@ -80,12 +82,12 @@ npm run build
 npm run pack:dist
 ```
 
-Design notes live under `docs/superpowers/specs/`.
+设计说明见 `docs/superpowers/specs/`。
 
-## Publish notes
+## 发布说明
 
-See [PUBLISH.md](./PUBLISH.md) for npm publish checklist.
+见 [PUBLISH.md](./PUBLISH.md)。
 
-## License
+## 许可
 
-MIT. See `LICENSE` and `NOTICE` (protocol conventions reimplemented from Folio / touchFish community clients).
+MIT。详见 `LICENSE` 与 `NOTICE`（协议约定参考 Folio / touchFish 社区客户端，自行实现）。
