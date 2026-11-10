@@ -57,7 +57,7 @@ dsh plugin --profile web add -w dsh-weread-bilingual
 Pin a version:
 
 ```sh
-dsh plugin --profile desktop add -w dsh-weread-bilingual@0.1.9
+dsh plugin --profile desktop add -w dsh-weread-bilingual@0.1.10
 ```
 
 To upgrade: run the same `add` again (or update in the marketplace), then restart DSH.

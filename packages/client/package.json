@@ -1,6 +1,6 @@
 {
   "name": "dsh-weread-bilingual-client",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "description": "Internal client sources for dsh-weread-bilingual (not published separately)",
   "type": "module",

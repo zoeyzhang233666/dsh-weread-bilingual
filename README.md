@@ -57,7 +57,7 @@ dsh plugin --profile web add -w dsh-weread-bilingual
 指定版本：
 
 ```sh
-dsh plugin --profile desktop add -w dsh-weread-bilingual@0.1.9
+dsh plugin --profile desktop add -w dsh-weread-bilingual@0.1.10
 ```
 
 升级到最新：再执行一次上面的 `add`（或在市场里更新），然后重启 DSH。
