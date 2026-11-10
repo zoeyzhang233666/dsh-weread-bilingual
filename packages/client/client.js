@@ -3024,7 +3024,18 @@ function ReaderPanel() {
       }
       return books2;
     } catch (err) {
-      setError(err.message || String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (/Login expired|Re-import your Weread Cookie|unauthorized|登录/i.test(message)) {
+        try {
+          await api.logout();
+        } catch {
+        }
+        setBooks([]);
+        setStatus((prev) => prev ? { ...prev, loggedIn: false } : { loggedIn: false });
+        setError("登录已过期，请重新扫码登录（或手动粘贴 Cookie）。");
+        return [];
+      }
+      setError(message);
       return [];
     } finally {
       setLoading(false);
@@ -3639,11 +3650,21 @@ function ReaderPanel() {
         modelSettingsBlock,
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wrb-reader-head", children: [
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "wrb-btn", onClick: loadShelf, disabled: loading, children: "Refresh" }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "wrb-btn", onClick: async () => {
-            stopQr();
-            await api.logout();
-            await loadShelf();
-          }, children: "Log out" }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "wrb-btn",
+              onClick: async () => {
+                stopQr();
+                await api.logout();
+                setStatus((prev) => prev ? { ...prev, loggedIn: false } : { loggedIn: false });
+                setBooks([]);
+                setError("");
+              },
+              children: "Log out"
+            }
+          ),
           /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "wrb-meta", children: [
             books.length,
             " books"

@@ -225,7 +225,16 @@ export function ReaderPanel() {
       }
       return books
     } catch (err) {
-      setError(err.message || String(err))
+      const message = err instanceof Error ? err.message : String(err)
+      // Stale cookie still counts as loggedIn; clear it so the QR login UI returns.
+      if (/Login expired|Re-import your Weread Cookie|unauthorized|登录/i.test(message)) {
+        try { await api.logout() } catch { /* ignore */ }
+        setBooks([])
+        setStatus(prev => (prev ? { ...prev, loggedIn: false } : { loggedIn: false }))
+        setError('登录已过期，请重新扫码登录（或手动粘贴 Cookie）。')
+        return []
+      }
+      setError(message)
       return []
     } finally {
       setLoading(false)
@@ -884,7 +893,19 @@ export function ReaderPanel() {
               {modelSettingsBlock}
               <div className="wrb-reader-head">
                 <button type="button" className="wrb-btn" onClick={loadShelf} disabled={loading}>Refresh</button>
-                <button type="button" className="wrb-btn" onClick={async () => { stopQr(); await api.logout(); await loadShelf() }}>Log out</button>
+                <button
+                  type="button"
+                  className="wrb-btn"
+                  onClick={async () => {
+                    stopQr()
+                    await api.logout()
+                    setStatus(prev => (prev ? { ...prev, loggedIn: false } : { loggedIn: false }))
+                    setBooks([])
+                    setError('')
+                  }}
+                >
+                  Log out
+                </button>
                 <span className="wrb-meta">{books.length} books</span>
               </div>
               {books.length === 0 && !loading ? <div className="wrb-empty">Shelf is empty.</div> : null}
