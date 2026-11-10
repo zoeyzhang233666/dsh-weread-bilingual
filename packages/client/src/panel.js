@@ -124,6 +124,10 @@ export function ReaderPanel() {
   const [activeId, setActiveId] = useState(null)
   const [toast, setToast] = useState('')
   const toastTimerRef = useRef(null)
+  const [modelCatalog, setModelCatalog] = useState({ providers: [], warnings: [] })
+  const [modelDraftProvider, setModelDraftProvider] = useState('')
+  const [modelDraftModel, setModelDraftModel] = useState('')
+  const [modelNotice, setModelNotice] = useState('')
 
   const bodyRef = useRef(null)
   const queueRef = useRef([])
@@ -155,7 +159,11 @@ export function ReaderPanel() {
   chaptersRef.current = chapters
 
   const chapter = chapters[chapterIdx] || null
-  const modelLabel = status?.model ? `${status.model.provider}/${status.model.model}` : 'no model'
+  const modelLabel = status?.model
+    ? `${status.model.provider}/${status.model.model}${
+      status.modelSource === 'saved' ? ' · 已选' : status.modelSource === 'auto' ? ' · 自动' : ''
+    }`
+    : 'no model'
   const canPrev = Boolean(book && chapterIdx > 0 && !loading)
   const canNext = Boolean(book && chapterIdx < chapters.length - 1 && !loading)
   const autoAllowed = modeAllowsAutoQueue(displayMode)
@@ -185,6 +193,15 @@ export function ReaderPanel() {
       const theme = normalizeTranslationTheme(next.translationTheme)
       setTranslationTheme(theme)
       writeLocalTranslationTheme(theme)
+    }
+    const savedProvider = String(next.modelProvider || '').trim()
+    const savedModel = String(next.modelId || '').trim()
+    setModelDraftProvider(savedProvider)
+    setModelDraftModel(savedModel)
+    if (savedProvider && next.modelSource && next.modelSource !== 'saved') {
+      setModelNotice('已保存的模型不可用，已自动换用当前模型')
+    } else {
+      setModelNotice('')
     }
     return next
   }, [])
@@ -240,6 +257,87 @@ export function ReaderPanel() {
     queueRef.current = []
     queuedIdsRef.current = new Set()
   }, [])
+
+  const loadModels = useCallback(async () => {
+    try {
+      const catalog = await api.models()
+      setModelCatalog(catalog || { providers: [], warnings: [] })
+    } catch (error) {
+      setModelCatalog({ providers: [], warnings: [error instanceof Error ? error.message : String(error)] })
+    }
+  }, [])
+
+  const saveModelPrefs = useCallback(async (provider, model) => {
+    clearQueue()
+    await api.prefs({ modelProvider: provider, modelId: model })
+    await refreshStatus()
+    showToast(provider ? '翻译模型已更新' : '已恢复自动选择模型')
+  }, [clearQueue, refreshStatus, showToast])
+
+  const onProviderChange = useCallback(async (providerId) => {
+    setModelDraftProvider(providerId)
+    const entry = modelCatalog.providers.find(p => p.id === providerId)
+    const first = entry?.models?.[0]?.id || ''
+    setModelDraftModel(first)
+    if (!providerId) {
+      await saveModelPrefs('', '')
+      return
+    }
+    if (first) await saveModelPrefs(providerId, first)
+  }, [modelCatalog.providers, saveModelPrefs])
+
+  const onModelChange = useCallback(async (modelId) => {
+    setModelDraftModel(modelId)
+    if (modelDraftProvider && modelId) await saveModelPrefs(modelDraftProvider, modelId)
+  }, [modelDraftProvider, saveModelPrefs])
+
+  const restoreAutoModel = useCallback(async () => {
+    setModelDraftProvider('')
+    setModelDraftModel('')
+    await saveModelPrefs('', '')
+  }, [saveModelPrefs])
+
+  const modelSettingsBlock = (
+    <details
+      className="wrb-model-settings"
+      onToggle={event => {
+        if (event.currentTarget.open) void loadModels()
+      }}
+    >
+      <summary>翻译模型</summary>
+      <div className="wrb-model-settings-body">
+        <p className="wrb-hint">从 DSH 已注册的供应商中选择；API Key 请在 DSH Models 页配置。</p>
+        {modelNotice ? <p className="wrb-notice">{modelNotice}</p> : null}
+        <label>
+          供应商
+          <select value={modelDraftProvider} onChange={event => { void onProviderChange(event.target.value) }}>
+            <option value="">（自动）</option>
+            {modelCatalog.providers.map(provider => (
+              <option key={provider.id} value={provider.id} disabled={!provider.models?.length}>
+                {provider.name || provider.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          模型
+          <select
+            value={modelDraftModel}
+            onChange={event => { void onModelChange(event.target.value) }}
+            disabled={!modelDraftProvider}
+          >
+            <option value="">（自动）</option>
+            {(modelCatalog.providers.find(provider => provider.id === modelDraftProvider)?.models || []).map(model => (
+              <option key={model.id} value={model.id}>{model.name || model.id}</option>
+            ))}
+          </select>
+        </label>
+        <div className="wrb-model-actions">
+          <button type="button" className="wrb-btn" onClick={() => { void restoreAutoModel() }}>恢复自动</button>
+        </div>
+      </div>
+    </details>
+  )
 
   const pumpQueue = useCallback(async () => {
     if (busyRef.current) return
@@ -779,9 +877,11 @@ export function ReaderPanel() {
                   <button type="button" className="wrb-btn primary" onClick={saveCookie} disabled={loading || !cookieDraft.trim()}>保存 Cookie</button>
                 </div>
               ) : null}
+              {modelSettingsBlock}
             </div>
           ) : (
             <div className="wrb-shelf">
+              {modelSettingsBlock}
               <div className="wrb-reader-head">
                 <button type="button" className="wrb-btn" onClick={loadShelf} disabled={loading}>Refresh</button>
                 <button type="button" className="wrb-btn" onClick={async () => { stopQr(); await api.logout(); await loadShelf() }}>Log out</button>

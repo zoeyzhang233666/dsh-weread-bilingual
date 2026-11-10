@@ -2146,6 +2146,7 @@ function createApi(base = "/weread-bilingual/api") {
   }).then(parse);
   return {
     status: () => request("/status"),
+    models: () => request("/models"),
     startQr: () => request("/auth/qr/start", { method: "POST", body: "{}" }),
     waitQr: (body) => request("/auth/qr/wait", { method: "POST", body: JSON.stringify(body) }),
     saveCookie: (cookie) => request("/auth/cookie", { method: "POST", body: JSON.stringify({ cookie }) }),
@@ -2340,7 +2341,7 @@ async function qrDataUrlFromText(text) {
 }
 
 // src/styles.js
-var CSS_VERSION = "2026-11-09-qr-login";
+var CSS_VERSION = "2026-11-10-model-select";
 var CSS = `
 .wrb-root {
   --wrb-bg: var(--bt-main, #faf9f5);
@@ -2548,6 +2549,56 @@ var CSS = `
 }
 .wrb-manual-cookie { margin-top: 12px; }
 .wrb-manual-cookie p { margin: 0 0 8px; color: var(--wrb-muted); font-size: 12px; }
+.wrb-model-settings {
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--wrb-line);
+  border-radius: 10px;
+  background: var(--wrb-panel);
+}
+.wrb-model-settings summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wrb-ink);
+}
+.wrb-model-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.wrb-model-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--wrb-muted);
+}
+.wrb-model-settings select {
+  font: inherit;
+  color: var(--wrb-ink);
+  background: var(--wrb-bg);
+  border: 1px solid var(--wrb-line-2);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.wrb-model-settings .wrb-model-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.wrb-model-settings .wrb-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--wrb-muted);
+}
+.wrb-model-settings .wrb-notice {
+  margin: 0;
+  font-size: 12px;
+  color: var(--wrb-accent);
+}
 .wrb-login textarea {
   width: 100%;
   min-height: 110px;
@@ -2884,6 +2935,10 @@ function ReaderPanel() {
   const [activeId, setActiveId] = (0, import_react.useState)(null);
   const [toast, setToast] = (0, import_react.useState)("");
   const toastTimerRef = (0, import_react.useRef)(null);
+  const [modelCatalog, setModelCatalog] = (0, import_react.useState)({ providers: [], warnings: [] });
+  const [modelDraftProvider, setModelDraftProvider] = (0, import_react.useState)("");
+  const [modelDraftModel, setModelDraftModel] = (0, import_react.useState)("");
+  const [modelNotice, setModelNotice] = (0, import_react.useState)("");
   const bodyRef = (0, import_react.useRef)(null);
   const queueRef = (0, import_react.useRef)([]);
   const queuedIdsRef = (0, import_react.useRef)(/* @__PURE__ */ new Set());
@@ -2912,7 +2967,7 @@ function ReaderPanel() {
   chapterIdxRef.current = chapterIdx;
   chaptersRef.current = chapters;
   const chapter = chapters[chapterIdx] || null;
-  const modelLabel = status?.model ? `${status.model.provider}/${status.model.model}` : "no model";
+  const modelLabel = status?.model ? `${status.model.provider}/${status.model.model}${status.modelSource === "saved" ? " · 已选" : status.modelSource === "auto" ? " · 自动" : ""}` : "no model";
   const canPrev = Boolean(book && chapterIdx > 0 && !loading);
   const canNext = Boolean(book && chapterIdx < chapters.length - 1 && !loading);
   const autoAllowed = modeAllowsAutoQueue(displayMode);
@@ -2938,6 +2993,15 @@ function ReaderPanel() {
       const theme = normalizeTranslationTheme(next.translationTheme);
       setTranslationTheme(theme);
       writeLocalTranslationTheme(theme);
+    }
+    const savedProvider = String(next.modelProvider || "").trim();
+    const savedModel = String(next.modelId || "").trim();
+    setModelDraftProvider(savedProvider);
+    setModelDraftModel(savedModel);
+    if (savedProvider && next.modelSource && next.modelSource !== "saved") {
+      setModelNotice("已保存的模型不可用，已自动换用当前模型");
+    } else {
+      setModelNotice("");
     }
     return next;
   }, []);
@@ -2989,6 +3053,85 @@ function ReaderPanel() {
     queueRef.current = [];
     queuedIdsRef.current = /* @__PURE__ */ new Set();
   }, []);
+  const loadModels = (0, import_react.useCallback)(async () => {
+    try {
+      const catalog = await api.models();
+      setModelCatalog(catalog || { providers: [], warnings: [] });
+    } catch (error2) {
+      setModelCatalog({ providers: [], warnings: [error2 instanceof Error ? error2.message : String(error2)] });
+    }
+  }, []);
+  const saveModelPrefs = (0, import_react.useCallback)(async (provider, model) => {
+    clearQueue();
+    await api.prefs({ modelProvider: provider, modelId: model });
+    await refreshStatus();
+    showToast(provider ? "翻译模型已更新" : "已恢复自动选择模型");
+  }, [clearQueue, refreshStatus, showToast]);
+  const onProviderChange = (0, import_react.useCallback)(async (providerId) => {
+    setModelDraftProvider(providerId);
+    const entry = modelCatalog.providers.find((p) => p.id === providerId);
+    const first = entry?.models?.[0]?.id || "";
+    setModelDraftModel(first);
+    if (!providerId) {
+      await saveModelPrefs("", "");
+      return;
+    }
+    if (first) await saveModelPrefs(providerId, first);
+  }, [modelCatalog.providers, saveModelPrefs]);
+  const onModelChange = (0, import_react.useCallback)(async (modelId) => {
+    setModelDraftModel(modelId);
+    if (modelDraftProvider && modelId) await saveModelPrefs(modelDraftProvider, modelId);
+  }, [modelDraftProvider, saveModelPrefs]);
+  const restoreAutoModel = (0, import_react.useCallback)(async () => {
+    setModelDraftProvider("");
+    setModelDraftModel("");
+    await saveModelPrefs("", "");
+  }, [saveModelPrefs]);
+  const modelSettingsBlock = /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+    "details",
+    {
+      className: "wrb-model-settings",
+      onToggle: (event) => {
+        if (event.currentTarget.open) void loadModels();
+      },
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("summary", { children: "翻译模型" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wrb-model-settings-body", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "wrb-hint", children: "从 DSH 已注册的供应商中选择；API Key 请在 DSH Models 页配置。" }),
+          modelNotice ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "wrb-notice", children: modelNotice }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+            "供应商",
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", { value: modelDraftProvider, onChange: (event) => {
+              void onProviderChange(event.target.value);
+            }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "（自动）" }),
+              modelCatalog.providers.map((provider) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: provider.id, disabled: !provider.models?.length, children: provider.name || provider.id }, provider.id))
+            ] })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+            "模型",
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+              "select",
+              {
+                value: modelDraftModel,
+                onChange: (event) => {
+                  void onModelChange(event.target.value);
+                },
+                disabled: !modelDraftProvider,
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "（自动）" }),
+                  (modelCatalog.providers.find((provider) => provider.id === modelDraftProvider)?.models || []).map((model) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: model.id, children: model.name || model.id }, model.id))
+                ]
+              }
+            )
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "wrb-model-actions", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "wrb-btn", onClick: () => {
+            void restoreAutoModel();
+          }, children: "恢复自动" }) })
+        ] })
+      ]
+    }
+  );
   const pumpQueue = (0, import_react.useCallback)(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -3490,8 +3633,10 @@ function ReaderPanel() {
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "打开 weread.qq.com，登录后从请求头复制 Cookie 粘贴到这里。" }),
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("textarea", { value: cookieDraft, onChange: (event) => setCookieDraft(event.target.value), placeholder: "wr_vid=...; wr_skey=...; ..." }),
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "wrb-btn primary", onClick: saveCookie, disabled: loading || !cookieDraft.trim(), children: "保存 Cookie" })
-        ] }) : null
+        ] }) : null,
+        modelSettingsBlock
       ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wrb-shelf", children: [
+        modelSettingsBlock,
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wrb-reader-head", children: [
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "wrb-btn", onClick: loadShelf, disabled: loading, children: "Refresh" }),
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "wrb-btn", onClick: async () => {
