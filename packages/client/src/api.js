@@ -16,6 +16,7 @@ export function createApi(base = '/weread-bilingual/api') {
 
   return {
     status: () => request('/status'),
+    models: () => request('/models'),
     startQr: () => request('/auth/qr/start', { method: 'POST', body: '{}' }),
     waitQr: body => request('/auth/qr/wait', { method: 'POST', body: JSON.stringify(body) }),
     saveCookie: cookie => request('/auth/cookie', { method: 'POST', body: JSON.stringify({ cookie }) }),
