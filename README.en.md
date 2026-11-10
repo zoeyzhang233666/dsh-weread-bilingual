@@ -4,7 +4,7 @@
 
 WeChat Reading (**微信读书**) bilingual reader for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
-Read Chinese books in the **right sidebar**, see English sentence-by-sentence with your **current DSH model**, and keep Weread reading time in sync. Built for **learning English in a context you actually care about**.
+Read Chinese books in the **right sidebar**, see English sentence-by-sentence with a **plugin-selectable DSH model route**, and keep Weread reading time in sync. Built for **learning English in a context you actually care about**.
 
 > **Install name (copy this into the DSH plugin marketplace / installer):**
 >
@@ -21,6 +21,7 @@ Read Chinese books in the **right sidebar**, see English sentence-by-sentence wi
 - Translation themes (plain / dashed / highlight / quote / weak / mask)
 - Space to pause auto-translate (in bilingual modes)
 - Export the current chapter as a bilingual Markdown table (**Save MD**)
+- **Translation model:** pick provider/model on the shelf (plugin-local; auto-skips keyless official routes)
 - Reading-time heartbeats via Weread `/web/book/read`
 
 ## Requirements
@@ -86,6 +87,7 @@ Replace the last path with your local checkout.
 3. Open a book from the shelf.
 4. Default **Hover** mode: hover a sentence to translate (saves tokens). Switch **Mode** / **Theme** in the toolbar as needed.
 5. **Save MD** exports the current chapter’s source + translations.
+6. **Translation model:** Use **翻译模型** on the shelf to pick provider/model (plugin-local only; prefers a usable DSH default, else the first usable third-party route). API keys stay on the DSH Models page.
 
 ## Risks
 

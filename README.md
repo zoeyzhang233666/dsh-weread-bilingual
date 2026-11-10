@@ -21,6 +21,7 @@
 - 译文样式：Plain / Dashed / Highlight / Quote / Weak / Mask
 - 双语模式下空格可暂停自动翻译
 - **Save MD**：导出当前章双语 Markdown 表格
+- **翻译模型**：书架页可切换供应商/模型（插件本地偏好；自动避开无 Key 的官方路由）
 - 阅读时长心跳（Weread `/web/book/read`）
 
 ## 环境
@@ -86,6 +87,7 @@ dsh plugin --profile desktop add -w "d:/weread-bilingual-dsh"
 3. 从书架打开书籍。
 4. 默认 **Hover**：悬停句子才翻译；工具栏可切换 Mode / Theme。
 5. **Save MD** 导出当前章原文与译文。
+6. **翻译模型**：书架页「翻译模型」可切换供应商与模型（仅影响本插件；默认优先用可用的 DSH 全局模型，否则自动选第一个可用第三方路由）。API Key 仍在 DSH Models 页配置。
 
 ## 风险说明
 
