@@ -99,15 +99,15 @@ async function runOnce(llm, route, system, user, signal) {
 }
 
 /** One-shot sentence translation through the Harness model registry. */
-export function createTranslator(getLlm, getDefault) {
+export function createTranslator(getLlm, getRoute) {
   return async function translateSentence({ text, direction = 'zh-en', previous = '', signal }) {
     const source = String(text || '').trim()
     if (!source) throw new Error('Empty sentence.')
     if (source.length > 4000) throw new Error('Sentence too long to translate.')
 
-    const route = getDefault()?.currentSelection?.()
+    const route = await getRoute()
     if (!route?.provider || !route?.model) {
-      throw new Error('Select a default model in DeepSeek Harness for translation.')
+      throw new Error('No usable translation model. Pick one in 翻译模型 settings or configure a provider on the DSH Models page.')
     }
     const llm = getLlm()
     if (!llm?.prepareCall) {
@@ -135,15 +135,19 @@ export function createTranslator(getLlm, getDefault) {
     if (!result) throw new Error('The model returned no translation.')
     return {
       translation: result,
-      modelId: `${route.provider}/${route.model}`,
+      modelId: route.modelId || `${route.provider}/${route.model}`,
       provider: route.provider,
       model: route.model,
     }
   }
 }
 
-export function currentModelLabel(getDefault) {
-  const route = getDefault()?.currentSelection?.()
+export async function currentModelLabel(getRoute) {
+  const route = await getRoute()
   if (!route?.provider || !route?.model) return null
-  return { provider: route.provider, model: route.model, modelId: `${route.provider}/${route.model}` }
+  return {
+    provider: route.provider,
+    model: route.model,
+    modelId: route.modelId || `${route.provider}/${route.model}`,
+  }
 }

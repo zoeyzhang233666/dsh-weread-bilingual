@@ -1,9 +1,10 @@
 import z from '@deepseek-ai/schemastery'
 import { pathname, readJson, sendJson } from './http.js'
+import { buildModelCatalog, normalizeModelPreference, resolveRoute } from './modelRoute.js'
 import { createReadingClock } from './reading.js'
 import { normalizeDisplayMode, normalizeTranslationTheme } from './prefs.js'
 import { cacheKey, splitSentences } from './sentences.js'
-import { createTranslator, currentModelLabel, TRANSLATE_PROMPT_VERSION } from './translate.js'
+import { createTranslator, TRANSLATE_PROMPT_VERSION } from './translate.js'
 import * as weread from './weread/client.js'
 import { createQrSession, finishLoginFromInfo, pollLoginInfo, refreshCookie } from './weread/login.js'
 
@@ -17,6 +18,8 @@ export const Config = z.object({
   autoTranslate: z.boolean().default(true).volatile(),
   displayMode: z.string().default('hover').volatile(),
   translationTheme: z.string().default('plain').volatile(),
+  modelProvider: z.string().default('').volatile(),
+  modelId: z.string().default('').volatile(),
 })
 
 const API = '/weread-bilingual/api'
@@ -52,6 +55,12 @@ function settingsOf(config) {
     get translationTheme() {
       return normalizeTranslationTheme(live(raw.translationTheme, 'plain'))
     },
+    get modelProvider() {
+      return String(live(raw.modelProvider, '') || '').trim()
+    },
+    get modelId() {
+      return String(live(raw.modelId, '') || '').trim()
+    },
   }
 }
 
@@ -64,10 +73,22 @@ function requireCookie(settings, res) {
 export function apply(ctx, config) {
   const settings = settingsOf(config)
   const clocks = new Map()
-  const translate = createTranslator(
-    () => ctx.get('llm'),
-    () => ctx.get('agentDefaultModel'),
-  )
+
+  const getRoute = async () => {
+    const llm = ctx.get('llm')
+    return resolveRoute({
+      savedProvider: settings.modelProvider,
+      savedModel: settings.modelId,
+      dshSelection: ctx.get('agentDefaultModel')?.currentSelection?.() || null,
+      listProviders: () => llm?.listProviders?.() || [],
+      listModels: (id) => {
+        if (!llm?.listModels) throw new Error('Harness LLM service is unavailable.')
+        return llm.listModels(id)
+      },
+    })
+  }
+
+  const translate = createTranslator(() => ctx.get('llm'), getRoute)
 
   const persist = async (patch) => {
     const writer = ctx.get('settings')
@@ -107,14 +128,35 @@ export function apply(ctx, config) {
     try {
       if (pathIs(path, '/status') && req.method === 'GET') {
         if (settings.cookie.trim()) await maybeRefreshCookie()
+        const route = await getRoute()
+        const model = route
+          ? { provider: route.provider, model: route.model, modelId: route.modelId }
+          : null
         sendJson(res, 200, {
           loggedIn: Boolean(settings.cookie.trim()),
           direction: settings.direction,
           autoTranslate: settings.autoTranslate,
           displayMode: settings.displayMode,
           translationTheme: settings.translationTheme,
-          model: currentModelLabel(() => ctx.get('agentDefaultModel')),
+          model,
+          modelSource: route?.source,
+          modelProvider: settings.modelProvider,
+          modelId: settings.modelId,
         })
+        return
+      }
+
+      if (pathIs(path, '/models') && req.method === 'GET') {
+        const llm = ctx.get('llm')
+        if (!llm?.listProviders || !llm?.listModels) {
+          sendJson(res, 200, { providers: [], warnings: ['Harness LLM service is unavailable.'] })
+          return
+        }
+        const catalog = await buildModelCatalog({
+          listProviders: () => llm.listProviders(),
+          listModels: (id) => llm.listModels(id),
+        })
+        sendJson(res, 200, catalog)
         return
       }
 
@@ -186,12 +228,22 @@ export function apply(ctx, config) {
         if (typeof body.autoTranslate === 'boolean') patch.autoTranslate = body.autoTranslate
         if (body.displayMode != null) patch.displayMode = normalizeDisplayMode(body.displayMode)
         if (body.translationTheme != null) patch.translationTheme = normalizeTranslationTheme(body.translationTheme)
+        if (body.modelProvider != null || body.modelId != null) {
+          const next = normalizeModelPreference(
+            body.modelProvider != null ? body.modelProvider : settings.modelProvider,
+            body.modelId != null ? body.modelId : settings.modelId,
+          )
+          patch.modelProvider = next.modelProvider
+          patch.modelId = next.modelId
+        }
         if (Object.keys(patch).length) await persist(patch)
         sendJson(res, 200, {
           direction: settings.direction,
           autoTranslate: settings.autoTranslate,
           displayMode: settings.displayMode,
           translationTheme: settings.translationTheme,
+          modelProvider: settings.modelProvider,
+          modelId: settings.modelId,
         })
         return
       }
@@ -268,27 +320,41 @@ export function apply(ctx, config) {
           sendJson(res, 400, { error: 'text and sentenceId required' })
           return
         }
-        const model = currentModelLabel(() => ctx.get('agentDefaultModel'))
-        const key = cacheKey({
-          bookId,
-          chapterUid,
-          sentenceId,
-          direction,
-          modelId: model?.modelId,
-          promptVersion: TRANSLATE_PROMPT_VERSION,
-        })
-        if (!force && translationCache.has(key)) {
-          sendJson(res, 200, { translation: translationCache.get(key), cached: true, model })
-          return
+        try {
+          const route = await getRoute()
+          const model = route
+            ? { provider: route.provider, model: route.model, modelId: route.modelId }
+            : null
+          const key = cacheKey({
+            bookId,
+            chapterUid,
+            sentenceId,
+            direction,
+            modelId: model?.modelId,
+            promptVersion: TRANSLATE_PROMPT_VERSION,
+          })
+          if (!force && translationCache.has(key)) {
+            sendJson(res, 200, { translation: translationCache.get(key), cached: true, model })
+            return
+          }
+          if (force) translationCache.delete(key)
+          const result = await translate({ text, direction, previous, signal: AbortSignal.timeout(90_000) })
+          translationCache.set(key, result.translation)
+          if (translationCache.size > 2000) {
+            const first = translationCache.keys().next().value
+            translationCache.delete(first)
+          }
+          sendJson(res, 200, { translation: result.translation, cached: false, model: result })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (/no API key|MISSING_CREDENTIAL|credential/i.test(message)) {
+            sendJson(res, 502, {
+              error: 'Current model has no usable API key. Switch provider in 翻译模型, or add a key on the DSH Models page.',
+            })
+            return
+          }
+          throw error
         }
-        if (force) translationCache.delete(key)
-        const result = await translate({ text, direction, previous, signal: AbortSignal.timeout(90_000) })
-        translationCache.set(key, result.translation)
-        if (translationCache.size > 2000) {
-          const first = translationCache.keys().next().value
-          translationCache.delete(first)
-        }
-        sendJson(res, 200, { translation: result.translation, cached: false, model: result })
         return
       }
 
